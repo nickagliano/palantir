@@ -1,0 +1,18 @@
+[package]
+name        = "palantir"
+version     = "0.1.0"
+description = "Web terminal with command palette — see into your machine from anywhere"
+authors     = ["nickagliano"]
+license     = "MIT"
+repository  = "https://github.com/nickagliano/palantir"
+platform    = ["aarch64-apple-darwin"]
+
+[system-dependencies]
+brew = ["node", "tmux"]
+
+[service]
+enabled = true
+start   = "HOST=$(tailscale ip -4) node server.js"
+port    = 4444
+health_check = "GET /health"
+tls          = true

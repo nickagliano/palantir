@@ -1,0 +1,15 @@
+[
+  { "label": "↑",             "cmd": "\u001b[A",           "group": "keys" },
+  { "label": "↓",             "cmd": "\u001b[B",           "group": "keys" },
+  { "label": "←",             "cmd": "\u001b[D",           "group": "keys" },
+  { "label": "→",             "cmd": "\u001b[C",           "group": "keys" },
+  { "label": "esc",           "cmd": "\u001b",             "group": "keys" },
+  { "label": "tab",           "cmd": "\t",                 "group": "keys" },
+  { "label": "shift + tab",   "cmd": "\u001b[Z",           "group": "keys" },
+  { "label": "go for it",     "cmd": "go for it\r",        "group": "replies" },
+  { "label": "give me ideas", "cmd": "give me ideas\r",    "group": "replies" },
+  { "label": "yes",           "cmd": "yes\r",              "group": "replies" },
+  { "label": "try again",     "cmd": "try again\r",        "group": "replies" },
+  { "label": "fix it",        "cmd": "fix it\r",           "group": "replies" },
+  { "label": "i'm feeling lucky", "cmd": "i'm feeling lucky\r", "group": "replies" }
+]

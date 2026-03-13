@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Palantir">
+  <title>palantir</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --border: #2a2a2a;
+      --accent: #c9a84c;
+      --accent-dim: #7a6030;
+      --text: #e8e8e8;
+      --text-dim: #666;
+      --group-ai: #7c3aed;
+      --group-epc: #0ea5e9;
+      --group-git: #16a34a;
+      --group-shell: #475569;
+    }
+
+    #gate {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #gate form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 240px;
+    }
+    #gate-logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    #gate-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: monospace;
+      text-align: center;
+      outline: none;
+    }
+    #gate-input:focus { border-color: var(--accent-dim); }
+    #gate form button {
+      background: var(--accent-dim);
+      border: none;
+      color: var(--bg);
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* ── header ── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: 44px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #logo {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-transform: lowercase;
+    }
+
+    #logo span { color: var(--text-dim); font-weight: 400; }
+
+
+    /* ── main area ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── terminal ── */
+    #terminal-wrap {
+      flex: 1;
+      overflow: hidden;
+      padding: 8px;
+      touch-action: none;
+    }
+
+    #terminal { height: 100%; }
+    .xterm { height: 100%; }
+    .xterm-viewport { border-radius: 4px; }
+
+    /* iOS Safari won't focus off-screen elements — keep textarea in viewport */
+    .xterm-helper-textarea {
+      left: 0 !important;
+      top: 0 !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+      z-index: -1 !important;
+    }
+
+    /* ── palette panel — desktop: slide in from right as overlay ── */
+    #palette {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+
+    #palette-buttons {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .group-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 8px 4px 4px;
+    }
+    .group-label:first-child { padding-top: 2px; }
+
+    .cmd-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.1s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      position: relative;
+    }
+
+    .cmd-btn::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      border-radius: 6px 0 0 6px;
+      background: var(--group-color, var(--text-dim));
+      opacity: 0.7;
+    }
+
+    .cmd-btn:hover {
+      border-color: var(--group-color, var(--accent-dim));
+      color: #fff;
+      background: #1e1e1e;
+    }
+    .cmd-btn:active { opacity: 0.7; }
+
+    .cmd-btn[data-group="ai"]    { --group-color: var(--group-ai); }
+    .cmd-btn[data-group="epc"]   { --group-color: var(--group-epc); }
+    .cmd-btn[data-group="git"]   { --group-color: var(--group-git); }
+    .cmd-btn[data-group="shell"] { --group-color: var(--group-shell); }
+
+    /* ── mobile bottom sheet ── */
+    /* ── mobile: palette is part of flex flow, pushes terminal up ── */
+    @media (max-width: 600px) {
+      #main { flex-direction: column; }
+
+      #palette {
+        position: static;
+        width: 100%;
+        height: 44vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        overflow-y: auto;
+        padding-bottom: env(safe-area-inset-bottom);
+        flex-shrink: 0;
+      }
+
+      #palette-buttons { flex-direction: row; flex-wrap: wrap; }
+      .cmd-btn { flex: 1 1 calc(50% - 4px); min-width: 0; }
+      .group-label { width: 100%; }
+    }
+
+    /* ── dictate / type bar ── */
+    #input-bar {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      gap: 6px;
+      align-items: flex-end;
+    }
+    #input-bar textarea {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      resize: none;
+      outline: none;
+      min-height: 52px;
+    }
+    #input-bar textarea:focus { border-color: var(--accent-dim); }
+    #input-send {
+      background: var(--bg);
+      border: 1px solid var(--accent-dim);
+      color: var(--accent);
+      align-self: stretch;
+      padding: 0 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<!-- iOS haptic trigger: clicking this label toggles a switch input, firing the Taptic Engine -->
+<label id="haptic-trigger" for="haptic-input" style="position:fixed;opacity:0;pointer-events:none;z-index:-1">
+  <input type="checkbox" switch="" id="haptic-input" style="all:initial;appearance:auto">
+</label>
+<div id="gate">
+  <form id="gate-form" action="#" method="post">
+    <div id="gate-logo">palantir</div>
+    <input type="text" name="username" autocomplete="username" value="palantir" style="display:none" />
+    <input id="gate-input" type="password" name="password" placeholder="token" autocomplete="current-password" />
+    <button type="submit">enter</button>
+  </form>
+</div>
+<div id="app">
+  <div id="header">
+    <div id="logo">palantir <span>// seeing stone</span></div>
+  </div>
+  <div id="main">
+    <div id="terminal-wrap">
+      <div id="terminal"></div>
+    </div>
+    <div id="palette">
+      <div id="input-bar">
+        <textarea id="input-text" placeholder="type or dictate…" rows="2" autocorrect="on" autocapitalize="sentences" spellcheck="true"></textarea>
+        <button id="input-send" type="button">send ↵</button>
+      </div>
+      <div id="palette-buttons"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0/lib/addon-fit.min.js"></script>
+<script>
+  const term = new Terminal({
+    theme: {
+      background: '#0d0d0d',
+      foreground: '#e8e8e8',
+      cursor: '#c9a84c',
+      cursorAccent: '#0d0d0d',
+      selectionBackground: '#c9a84c33',
+      black: '#1a1a1a', brightBlack: '#444',
+      red: '#e06c75',   brightRed: '#e06c75',
+      green: '#98c379', brightGreen: '#98c379',
+      yellow: '#e5c07b',brightYellow: '#e5c07b',
+      blue: '#61afef',  brightBlue: '#61afef',
+      magenta: '#c678dd',brightMagenta: '#c678dd',
+      cyan: '#56b6c2',  brightCyan: '#56b6c2',
+      white: '#e8e8e8', brightWhite: '#ffffff',
+    },
+    fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+    fontSize: 9,
+    lineHeight: 1.0,
+    cursorBlink: true,
+    scrollback: 5000,
+    allowProposedApi: true,
+  });
+
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(document.getElementById('terminal'));
+  fitAddon.fit();
+
+  // Auth gate
+  const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+  let ws, reconnectTimer, intentionalClose = false;
+
+  function send(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify(msg));
+  }
+
+  function connect() {
+    clearTimeout(reconnectTimer);
+    intentionalClose = false;
+    const token = sessionStorage.getItem('palantir_token');
+    ws = new WebSocket(`${wsProto}://${location.host}?token=${encodeURIComponent(token || '')}`);
+
+    ws.onopen = () => send({ type: 'resize', cols: term.cols, rows: term.rows });
+    ws.binaryType = 'arraybuffer';
+    ws.onmessage = (e) => term.write(
+      e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : e.data
+    );
+    ws.onclose = (e) => {
+      if (e.code === 1006 || e.code === 4000) {
+        // auth rejected — clear token and show gate
+        sessionStorage.removeItem('palantir_token');
+        showGate();
+      } else if (!intentionalClose) {
+        reconnectTimer = setTimeout(connect, 2000);
+      }
+    };
+  }
+
+  function showGate() {
+    document.getElementById('gate').style.display = 'flex';
+    document.getElementById('gate-input').value = '';
+    document.getElementById('gate-input').focus();
+  }
+
+  function submitGate() {
+    const val = document.getElementById('gate-input').value.trim();
+    if (!val) return;
+    sessionStorage.setItem('palantir_token', val);
+    document.getElementById('gate').style.display = 'none';
+    connect();
+  }
+
+  document.getElementById('gate-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitGate();
+  });
+
+  // Connect if we already have a token, otherwise show gate
+  if (sessionStorage.getItem('palantir_token')) connect();
+  else showGate();
+
+  term.onData((data) => send({ type: 'data', data }));
+
+  function sendResize() { send({ type: 'resize', cols: term.cols, rows: term.rows }); }
+
+  const ro = new ResizeObserver(() => { fitAddon.fit(); sendResize(); });
+  ro.observe(document.getElementById('terminal-wrap'));
+
+  window.visualViewport?.addEventListener('resize', () => {
+    document.getElementById('terminal-wrap').style.height =
+      (window.visualViewport.height - 44) + 'px';
+    fitAddon.fit();
+    sendResize();
+  });
+
+  // Mobile touch handling for terminal:
+  // - Swipe up/down → WheelEvent so tmux mouse mode can scroll
+  // - Tap (no movement) → focus xterm textarea for keyboard
+  let termTouchStartY = null;
+  let termTouchMoved = false;
+  const termWrap = document.getElementById('terminal-wrap');
+  const xtermScreen = () => document.querySelector('.xterm-screen') || document.getElementById('terminal');
+
+  termWrap.addEventListener('touchstart', (e) => {
+    termTouchStartY = e.touches[0].clientY;
+    termTouchMoved = false;
+  }, { passive: true });
+
+  termWrap.addEventListener('touchmove', (e) => {
+    if (termTouchStartY === null) return;
+    const dy = termTouchStartY - e.touches[0].clientY;
+    if (Math.abs(dy) > 3) termTouchMoved = true;
+    termTouchStartY = e.touches[0].clientY;
+    xtermScreen().dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true, cancelable: true,
+      deltaY: dy * 2, deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+    }));
+  }, { passive: true });
+
+  termWrap.addEventListener('touchend', () => {
+    termTouchStartY = null;
+    if (termTouchMoved) return;
+    const ta = document.querySelector('.xterm-helper-textarea');
+    if (ta) ta.focus();
+    else term.focus();
+  });
+
+  // Haptics via iOS switch input trick
+  const hapticTrigger = document.getElementById('haptic-trigger');
+  function haptic() { hapticTrigger.click(); }
+
+  // Input bar
+  const inputText = document.getElementById('input-text');
+  document.getElementById('input-send').addEventListener('click', () => {
+    const val = inputText.value;
+    haptic();
+    send({ type: 'data', data: val + '\r' });
+    inputText.value = '';
+    inputText.blur();
+  });
+  // Cmd+Enter / Ctrl+Enter also sends
+  inputText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('input-send').click();
+    }
+  });
+
+  // Palette
+  const buttonsEl = document.getElementById('palette-buttons');
+
+  function sendCmd(cmd) { haptic(); send({ type: 'data', data: cmd }); }
+
+  fetch('/palette.json')
+    .then(r => r.json())
+    .then(cmds => {
+      const groups = {};
+      cmds.forEach(c => {
+        const g = c.group || 'other';
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(c);
+      });
+
+      Object.entries(groups).forEach(([group, items]) => {
+        const label = document.createElement('div');
+        label.className = 'group-label';
+        label.textContent = group;
+        buttonsEl.appendChild(label);
+
+        items.forEach(({ label: text, cmd }) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'cmd-btn';
+          btn.dataset.group = group;
+          btn.textContent = text;
+          let touchMoved = false;
+          btn.addEventListener('touchstart', () => { touchMoved = false; }, { passive: true });
+          btn.addEventListener('touchmove', () => { touchMoved = true; }, { passive: true });
+          btn.addEventListener('touchend', (e) => { if (touchMoved) return; e.preventDefault(); sendCmd(cmd); });
+          btn.addEventListener('click', () => sendCmd(cmd));
+          buttonsEl.appendChild(btn);
+        });
+      });
+    });
+
+  term.focus();
+</script>
+</body>
+</html>
