@@ -23,7 +23,8 @@ const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parseInt(process.env.PORT || '4444');
 const SSH_KEY = path.join(os.homedir(), '.ssh', 'palantir_key');
 const SSH_USER = os.userInfo().username;
-const DOMAIN = process.env.DOMAIN || 'nicks-macbook-pro-2.tail52b10.ts.net';
+const DOMAIN = process.env.DOMAIN;
+if (!DOMAIN) { console.error('DOMAIN not set — refusing to start'); process.exit(1); }
 const tlsOptions = {
   cert: fs.readFileSync(path.join(__dirname, `${DOMAIN}.crt`)),
   key:  fs.readFileSync(path.join(__dirname, `${DOMAIN}.key`)),
