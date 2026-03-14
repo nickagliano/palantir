@@ -76,13 +76,38 @@ const tlsOptions = {
   key:  fs.readFileSync(path.join(__dirname, `${DOMAIN}.key`)),
 };
 
+// Per-IP brute-force tracking with Fibonacci lockout
+const loginState = new Map(); // ip -> { failures, lockedUntil, fibA, fibB }
+
+function getState(ip) {
+  return loginState.get(ip) || { failures: 0, lockedUntil: 0, fibA: 1, fibB: 1 };
+}
+
+function recordFailure(ip) {
+  const s = getState(ip);
+  s.failures++;
+  if (s.failures >= 3) {
+    const wait = s.fibA;
+    [s.fibA, s.fibB] = [s.fibB, s.fibA + s.fibB];
+    s.lockedUntil = Date.now() + wait * 1000;
+    s.failures = 0;
+  }
+  loginState.set(ip, s);
+}
+
+function recordSuccess(ip) { loginState.delete(ip); }
+
 const app = express();
 const server = https.createServer(tlsOptions, app);
 const wss = new WebSocketServer({
   server,
-  verifyClient: ({ req }) => {
+  verifyClient: ({ req }, cb) => {
+    const ip = req.socket.remoteAddress;
+    const s = getState(ip);
+    if (Date.now() < s.lockedUntil) { cb(false, 429, 'Too Many Attempts'); return; }
     const token = new URL(req.url, 'https://localhost').searchParams.get('token');
-    return token === TOKEN;
+    if (token === TOKEN) { recordSuccess(ip); cb(true); }
+    else { recordFailure(ip); cb(false, 401, 'Unauthorized'); }
   },
 });
 

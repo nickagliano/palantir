@@ -70,6 +70,10 @@
       background: #e05252;
       border-color: #e05252;
     }
+    .gate-dot.locked {
+      background: var(--text-dim);
+      border-color: var(--text-dim);
+    }
     #gate-pad {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -402,18 +406,54 @@
 
   // PIN pad
   let pin = '';
+  let failCount = 0;
+  let fibA = 1, fibB = 1; // Fibonacci state: next timeout = fibA seconds
+  let padLocked = false;
 
-  function updateDots(shake) {
+  function nextFib() {
+    const val = fibA;
+    [fibA, fibB] = [fibB, fibA + fibB];
+    return val;
+  }
+
+  function updateDots(state) {
+    // state: 'normal' | 'error' | 'locked'
     for (let i = 0; i < 4; i++) {
       const dot = document.getElementById('dot-' + i);
-      dot.classList.toggle('filled', i < pin.length);
-      dot.classList.toggle('error', shake);
+      dot.classList.toggle('filled', state !== 'locked' && i < pin.length);
+      dot.classList.toggle('error',  state === 'error');
+      dot.classList.toggle('locked', state === 'locked');
     }
+  }
+
+  function setPadDisabled(disabled) {
+    padLocked = disabled;
+    document.querySelectorAll('.pad-key').forEach(k => k.disabled = disabled);
+  }
+
+  function lockPad(seconds) {
+    pin = '';
+    setPadDisabled(true);
+    updateDots('locked');
+    const logo = document.getElementById('gate-logo');
+    let remaining = seconds;
+    logo.textContent = `try again in ${remaining}s`;
+    const t = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(t);
+        logo.textContent = 'palantir';
+        setPadDisabled(false);
+        updateDots('normal');
+      } else {
+        logo.textContent = `try again in ${remaining}s`;
+      }
+    }, 1000);
   }
 
   function showGate() {
     pin = '';
-    updateDots(false);
+    if (!padLocked) updateDots('normal');
     document.getElementById('gate').style.display = 'flex';
   }
 
@@ -424,22 +464,30 @@
   }
 
   function pinError() {
-    updateDots(true);
-    setTimeout(() => { pin = ''; updateDots(false); }, 600);
+    failCount++;
+    updateDots('error');
+    if (failCount >= 3) {
+      failCount = 0;
+      const wait = nextFib();
+      setTimeout(() => lockPad(wait), 600);
+    } else {
+      setTimeout(() => { pin = ''; updateDots('normal'); }, 600);
+    }
   }
 
   document.getElementById('gate-pad').addEventListener('click', (e) => {
+    if (padLocked) return;
     const key = e.target.closest('.pad-key');
     if (!key) return;
     if (key.id === 'pad-del') {
       pin = pin.slice(0, -1);
-      updateDots(false);
+      updateDots('normal');
       return;
     }
     const digit = key.dataset.digit;
     if (digit === undefined || pin.length >= 4) return;
     pin += digit;
-    updateDots(false);
+    updateDots('normal');
     if (pin.length === 4) submitPin();
   });
 
