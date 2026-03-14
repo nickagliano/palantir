@@ -34,10 +34,11 @@
       align-items: center;
       justify-content: center;
     }
-    #gate form {
+    #gate-inner {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      align-items: center;
+      gap: 28px;
       width: 240px;
     }
     #gate-logo {
@@ -46,31 +47,52 @@
       color: var(--accent);
       letter-spacing: 0.1em;
       text-align: center;
-      margin-bottom: 4px;
     }
-    #gate-input {
+    #gate-dots {
+      display: flex;
+      gap: 16px;
+    }
+    .gate-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: transparent;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .gate-dot.filled {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .gate-dot.error {
+      background: #e05252;
+      border-color: #e05252;
+    }
+    #gate-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+    }
+    .pad-key {
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 10px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-family: monospace;
-      text-align: center;
-      outline: none;
-    }
-    #gate-input:focus { border-color: var(--accent-dim); }
-    #gate form button {
-      background: var(--accent-dim);
-      border: none;
-      color: var(--bg);
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
+      border-radius: 8px;
+      font-size: 20px;
+      font-weight: 500;
+      height: 56px;
       cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s;
+      -webkit-tap-highlight-color: transparent;
     }
+    .pad-key:active { background: var(--accent-dim); }
+    .pad-key.pad-empty { visibility: hidden; pointer-events: none; }
+    .pad-key.pad-del { font-size: 16px; color: var(--text-dim); }
 
     html, body {
       height: 100%;
@@ -271,12 +293,29 @@
   <input type="checkbox" switch="" id="haptic-input" style="all:initial;appearance:auto">
 </label>
 <div id="gate">
-  <form id="gate-form" action="#" method="post">
+  <div id="gate-inner">
     <div id="gate-logo">palantir</div>
-    <input type="text" name="username" autocomplete="username" value="palantir" style="display:none" />
-    <input id="gate-input" type="password" name="password" placeholder="token" autocomplete="current-password" />
-    <button type="submit">enter</button>
-  </form>
+    <div id="gate-dots">
+      <div class="gate-dot" id="dot-0"></div>
+      <div class="gate-dot" id="dot-1"></div>
+      <div class="gate-dot" id="dot-2"></div>
+      <div class="gate-dot" id="dot-3"></div>
+    </div>
+    <div id="gate-pad">
+      <button class="pad-key" data-digit="1">1</button>
+      <button class="pad-key" data-digit="2">2</button>
+      <button class="pad-key" data-digit="3">3</button>
+      <button class="pad-key" data-digit="4">4</button>
+      <button class="pad-key" data-digit="5">5</button>
+      <button class="pad-key" data-digit="6">6</button>
+      <button class="pad-key" data-digit="7">7</button>
+      <button class="pad-key" data-digit="8">8</button>
+      <button class="pad-key" data-digit="9">9</button>
+      <div class="pad-key pad-empty"></div>
+      <button class="pad-key" data-digit="0">0</button>
+      <button class="pad-key pad-del" id="pad-del">⌫</button>
+    </div>
+  </div>
 </div>
 <div id="app">
   <div id="header">
@@ -350,32 +389,56 @@
     );
     ws.onclose = (e) => {
       if (e.code === 1006 || e.code === 4000) {
-        // auth rejected — clear token and show gate
         sessionStorage.removeItem('palantir_token');
         showGate();
+        if (e.code === 4000) pinError();
       } else if (!intentionalClose) {
         reconnectTimer = setTimeout(connect, 2000);
       }
     };
   }
 
-  function showGate() {
-    document.getElementById('gate').style.display = 'flex';
-    document.getElementById('gate-input').value = '';
-    document.getElementById('gate-input').focus();
+  // PIN pad
+  let pin = '';
+
+  function updateDots(shake) {
+    for (let i = 0; i < 4; i++) {
+      const dot = document.getElementById('dot-' + i);
+      dot.classList.toggle('filled', i < pin.length);
+      dot.classList.toggle('error', shake);
+    }
   }
 
-  function submitGate() {
-    const val = document.getElementById('gate-input').value.trim();
-    if (!val) return;
-    sessionStorage.setItem('palantir_token', val);
+  function showGate() {
+    pin = '';
+    updateDots(false);
+    document.getElementById('gate').style.display = 'flex';
+  }
+
+  function submitPin() {
+    sessionStorage.setItem('palantir_token', pin);
     document.getElementById('gate').style.display = 'none';
     connect();
   }
 
-  document.getElementById('gate-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    submitGate();
+  function pinError() {
+    updateDots(true);
+    setTimeout(() => { pin = ''; updateDots(false); }, 600);
+  }
+
+  document.getElementById('gate-pad').addEventListener('click', (e) => {
+    const key = e.target.closest('.pad-key');
+    if (!key) return;
+    if (key.id === 'pad-del') {
+      pin = pin.slice(0, -1);
+      updateDots(false);
+      return;
+    }
+    const digit = key.dataset.digit;
+    if (digit === undefined || pin.length >= 4) return;
+    pin += digit;
+    updateDots(false);
+    if (pin.length === 4) submitPin();
   });
 
   // Connect if we already have a token, otherwise show gate
