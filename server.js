@@ -16,12 +16,49 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const zlib = require('zlib');
+const { execFile } = require('child_process');
 
 // Generate a solid-color PNG (no dependencies)
-function solidPng(hex, size = 180) {
+function solidPng(hex, letter = null, fgHex = '#1a1a1a', size = 180) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
+  const fr = parseInt(fgHex.slice(1, 3), 16);
+  const fg = parseInt(fgHex.slice(3, 5), 16);
+  const fb = parseInt(fgHex.slice(5, 7), 16);
+
+  // Fill the canvas with the background color (one RGB triple per pixel).
+  const px = Buffer.alloc(size * size * 3);
+  for (let i = 0; i < size * size; i++) {
+    px[i * 3] = r; px[i * 3 + 1] = g; px[i * 3 + 2] = b;
+  }
+  const paintRect = (x1, y1, x2, y2) => {
+    for (let y = y1; y < y2; y++) {
+      for (let x = x1; x < x2; x++) {
+        const i = (y * size + x) * 3;
+        px[i] = fr; px[i + 1] = fg; px[i + 2] = fb;
+      }
+    }
+  };
+  // Rectangle-stroke glyphs at 180x180. Add more letters as more apps want them.
+  const glyphs = {
+    P: () => {
+      // 25-px-thick strokes; bowl hole is 65×25 around the middle of the upper half.
+      paintRect(40, 25, 65, 155);   // left stem (full height)
+      paintRect(40, 25, 155, 50);   // top of bowl
+      paintRect(130, 25, 155, 100); // right of bowl
+      paintRect(40, 75, 155, 100);  // bottom of bowl
+    },
+  };
+  if (letter && glyphs[letter]) glyphs[letter]();
+
+  // EPM family wrapper: viewfinder-style corner ticks. Same fg color as the letter.
+  // 14px inset, 20px long, 4px thick — present on every EPM app icon.
+  const tick = (x1, y1, x2, y2) => paintRect(x1, y1, x2, y2);
+  tick(14, 14, 34, 18); tick(14, 14, 18, 34);     // top-left
+  tick(146, 14, 166, 18); tick(162, 14, 166, 34); // top-right
+  tick(14, 162, 34, 166); tick(14, 146, 18, 166); // bottom-left
+  tick(146, 162, 166, 166); tick(162, 146, 166, 166); // bottom-right
 
   // CRC32 table
   const crcTable = new Uint32Array(256);
@@ -47,10 +84,13 @@ function solidPng(hex, size = 180) {
   ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
   ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
 
-  const row = Buffer.allocUnsafe(1 + size * 3);
-  row[0] = 0;
-  for (let x = 0; x < size; x++) { row[1 + x*3] = r; row[2 + x*3] = g; row[3 + x*3] = b; }
-  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  // Build PNG scanlines: filter byte 0 + one row of RGB triples per line.
+  const rowBytes = size * 3;
+  const raw = Buffer.alloc((rowBytes + 1) * size);
+  for (let y = 0; y < size; y++) {
+    raw[y * (rowBytes + 1)] = 0;
+    px.copy(raw, y * (rowBytes + 1) + 1, y * rowBytes, (y + 1) * rowBytes);
+  }
 
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -60,7 +100,16 @@ function solidPng(hex, size = 180) {
   ]);
 }
 
-const iconPng = solidPng('#c9a84c');
+const iconPng = solidPng('#c9a84c', 'P');
+
+const SESSION_FILE = path.join(__dirname, 'session');
+function readSavedSession() {
+  try { return fs.readFileSync(SESSION_FILE, 'utf8').trim() || null; } catch { return null; }
+}
+function saveSession(name) {
+  try { fs.writeFileSync(SESSION_FILE, name, 'utf8'); } catch (e) { console.error('failed to save session:', e.message); }
+}
+let currentSession = readSavedSession() || process.env.PALANTIR_SESSION || 'eps';
 
 const TOKEN = process.env.PALANTIR_TOKEN;
 if (!TOKEN) { console.error('PALANTIR_TOKEN not set — refusing to start'); process.exit(1); }
@@ -111,12 +160,43 @@ const wss = new WebSocketServer({
   },
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { etag: false, setHeaders: (res, filePath) => {
+  if (filePath.endsWith('index.html')) res.set('Cache-Control', 'no-store');
+}}));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/palette.json', (_req, res) => res.sendFile(path.join(__dirname, 'palette.json')));
 app.get('/apple-touch-icon.png', (_req, res) => {
   res.set('Content-Type', 'image/png').send(iconPng);
 });
+function requireToken(req, res, next) {
+  const token = req.query.token || req.headers['x-palantir-token'];
+  if (token === TOKEN) next();
+  else res.status(401).json({ error: 'Unauthorized' });
+}
+
+function listTmuxSessions(cb) {
+  execFile('/usr/local/bin/tmux', ['list-sessions', '-F', '#{session_name}'], (err, stdout) => {
+    cb(err ? [] : stdout.trim().split('\n').filter(Boolean));
+  });
+}
+
+app.get('/api/session', requireToken, (_req, res) => res.json({ session: currentSession }));
+
+app.get('/api/sessions', requireToken, (_req, res) => {
+  listTmuxSessions(sessions => res.json({ sessions, current: currentSession }));
+});
+
+app.post('/api/session', requireToken, express.json(), (req, res) => {
+  const { session } = req.body || {};
+  if (!session || typeof session !== 'string' || !/^[a-zA-Z0-9_\-.]+$/.test(session)) {
+    return res.status(400).json({ error: 'Invalid session name' });
+  }
+  currentSession = session;
+  saveSession(session);
+  console.log('session switched to:', currentSession);
+  res.json({ session: currentSession });
+});
+
 app.get('/manifest.json', (_req, res) => res.json({
   name: 'Palantir',
   short_name: 'Palantir',
@@ -137,12 +217,35 @@ wss.on('connection', (clientWs) => {
   let cols = 220, rows = 50;
   const pending = [];
 
+  // SIGWINCH alone isn't enough. If the browser and tmux disagree about the
+  // geometry even briefly, tmux repaints assuming the old size and leaves
+  // stale rows on screen — duplicated status lines that survive until you
+  // reattach. Once a resize settles, tell tmux to repaint from scratch.
+  let redrawTimer = null;
+  function scheduleRedraw() {
+    clearTimeout(redrawTimer);
+    redrawTimer = setTimeout(() => {
+      execFile('/usr/local/bin/tmux', ['list-clients', '-t', currentSession, '-F', '#{client_name}'], (err, out) => {
+        if (err) return;
+        out.trim().split('\n').filter(Boolean).forEach(name =>
+          execFile('/usr/local/bin/tmux', ['refresh-client', '-t', name], () => {}));
+      });
+    }, 250);
+  }
+
   clientWs.on('message', (raw) => {
     try {
       const msg = JSON.parse(raw);
       if (msg.type === 'resize') {
-        cols = msg.cols; rows = msg.rows;
+        // Ignore bogus geometry — the client can briefly compute 0 cols while
+        // the iOS keyboard animates, and a 0-wide pty wedges tmux.
+        const c = Math.floor(msg.cols), r = Math.floor(msg.rows);
+        if (!(c > 0 && r > 0)) return;
+        cols = c; rows = r;
+        // May be a no-op if the shell isn't up yet; the exec callback below
+        // re-applies the latest size once the stream exists.
         stream?.setWindow(rows, cols, 0, 0);
+        scheduleRedraw();
       } else if (msg.type === 'data') {
         if (stream) stream.write(msg.data);
         else pending.push(msg.data);
@@ -152,7 +255,8 @@ wss.on('connection', (clientWs) => {
 
   ssh.on('ready', () => {
     console.log('ssh ready, attaching tmux');
-    ssh.exec("LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 TERM=xterm-256color /usr/local/bin/tmux -u new-session -A -s pal", { pty: { term: 'xterm-256color', cols, rows }, env: { TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' } }, (err, sh) => {
+    saveSession(currentSession);
+    ssh.exec(`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 TERM=xterm-256color /usr/local/bin/tmux -u new-session -A -s ${currentSession}`, { pty: { term: 'xterm-256color', cols, rows }, env: { TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' } }, (err, sh) => {
       if (err) {
         console.error('shell error:', err.message);
         clientWs.send('\r\n\x1b[31m[shell failed: ' + err.message + ']\x1b[0m\r\n');
@@ -161,6 +265,17 @@ wss.on('connection', (clientWs) => {
       }
 
       stream = sh;
+
+      // ssh.exec() captured cols/rows as they were when the request went out,
+      // and any resize that landed while the channel was opening hit a null
+      // `stream` and was dropped. Since we connect to 127.0.0.1, ssh is often
+      // ready before the browser's first resize arrives, so the pty would keep
+      // the 220x50 default while the phone is ~100 cols wide. tmux then draws
+      // status lines wider than the viewport, they wrap, and every redraw
+      // pushes a duplicate down the screen. Re-apply the latest size here.
+      stream.setWindow(rows, cols, 0, 0);
+      console.log(`pty attached at ${cols}x${rows}`);
+      scheduleRedraw();
 
       // Drain any input that arrived before the shell was ready
       pending.forEach(d => stream.write(d));
@@ -194,6 +309,7 @@ wss.on('connection', (clientWs) => {
 
   clientWs.on('close', () => {
     console.log('browser disconnected');
+    clearTimeout(redrawTimer);
     stream?.close();
     ssh.end();
   });

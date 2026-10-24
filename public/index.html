@@ -22,7 +22,7 @@
       --text: #e8e8e8;
       --text-dim: #666;
       --group-ai: #7c3aed;
-      --group-epc: #0ea5e9;
+      --group-eps: #0ea5e9;
       --group-git: #16a34a;
       --group-shell: #475569;
     }
@@ -70,6 +70,19 @@
       background: #e05252;
       border-color: #e05252;
     }
+    @keyframes gate-shake {
+      0%   { transform: translateX(0); }
+      15%  { transform: translateX(-8px); }
+      30%  { transform: translateX(7px); }
+      45%  { transform: translateX(-6px); }
+      60%  { transform: translateX(5px); }
+      75%  { transform: translateX(-3px); }
+      90%  { transform: translateX(2px); }
+      100% { transform: translateX(0); }
+    }
+    #gate-dots.shake {
+      animation: gate-shake 0.45s ease;
+    }
     .gate-dot.locked {
       background: var(--text-dim);
       border-color: var(--text-dim);
@@ -95,6 +108,7 @@
       justify-content: center;
       transition: background 0.1s;
       -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     .pad-key:active { background: var(--accent-dim); }
     .pad-key.pad-empty { visibility: hidden; pointer-events: none; }
@@ -105,13 +119,13 @@
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      overflow: hidden;
     }
 
     #app {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
     }
 
     /* ── header ── */
@@ -120,7 +134,8 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 16px;
-      height: 44px;
+      padding-top: env(safe-area-inset-top);
+      height: calc(44px + env(safe-area-inset-top));
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
@@ -136,6 +151,103 @@
     }
 
     #logo span { color: var(--text-dim); font-weight: 400; }
+
+    #session-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      padding: 3px 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: border-color 0.1s, color 0.1s;
+      touch-action: manipulation;
+    }
+    #session-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
+    #session-btn::before { content: '⬡'; font-size: 9px; opacity: 0.5; }
+
+    #session-picker {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding-top: calc(52px + env(safe-area-inset-top));
+      padding-right: 12px;
+    }
+    #session-picker.open { display: flex; }
+    #session-picker-inner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 220px;
+      overflow: hidden;
+    }
+    .session-picker-title {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 10px 12px 6px;
+    }
+    #session-list { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 6px; }
+    .session-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      touch-action: manipulation;
+    }
+    .session-item.active { border-color: var(--accent-dim); color: var(--accent); }
+    .session-item:hover:not(.active) { border-color: var(--border); background: #1e1e1e; }
+    .session-item.active::after { content: '●'; font-size: 7px; margin-left: auto; }
+    #session-custom {
+      display: flex;
+      gap: 6px;
+      padding: 6px 8px 10px;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+    }
+    #session-custom input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+      min-width: 0;
+    }
+    #session-custom input:focus { border-color: var(--accent-dim); }
+    #session-go {
+      background: var(--bg);
+      border: 1px solid var(--accent-dim);
+      color: var(--accent);
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 5px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
 
 
     /* ── main area ── */
@@ -200,6 +312,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       color: var(--text);
+      touch-action: manipulation;
       padding: 8px 10px;
       border-radius: 6px;
       font-size: 10px;
@@ -231,7 +344,7 @@
     .cmd-btn:active { opacity: 0.7; }
 
     .cmd-btn[data-group="ai"]    { --group-color: var(--group-ai); }
-    .cmd-btn[data-group="epc"]   { --group-color: var(--group-epc); }
+    .cmd-btn[data-group="eps"]   { --group-color: var(--group-eps); }
     .cmd-btn[data-group="git"]   { --group-color: var(--group-git); }
     .cmd-btn[data-group="shell"] { --group-color: var(--group-shell); }
 
@@ -243,12 +356,15 @@
       #palette {
         position: static;
         width: 100%;
-        height: 44vh;
+        height: calc(44vh + env(safe-area-inset-bottom));
         border-left: none;
         border-top: 1px solid var(--border);
         overflow-y: auto;
-        padding-bottom: env(safe-area-inset-bottom);
         flex-shrink: 0;
+      }
+
+      #palette-buttons {
+        padding-bottom: env(safe-area-inset-bottom);
       }
 
       #palette-buttons { flex-direction: row; flex-wrap: wrap; }
@@ -277,8 +393,35 @@
       resize: none;
       outline: none;
       min-height: 52px;
+      touch-action: manipulation;
     }
     #input-bar textarea:focus { border-color: var(--accent-dim); }
+    #history-section {
+      padding: 0 8px 8px;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+    }
+    #history-section:empty { display: none; }
+    .history-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      text-align: left;
+      cursor: pointer;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      transition: all 0.1s;
+    }
+    .history-item:hover { color: var(--text); border-color: var(--accent-dim); }
+    .history-item:active { opacity: 0.7; }
+
     #input-send {
       background: var(--bg);
       border: 1px solid var(--accent-dim);
@@ -290,6 +433,7 @@
       cursor: pointer;
       white-space: nowrap;
       flex-shrink: 0;
+      touch-action: manipulation;
     }
   </style>
 </head>
@@ -326,6 +470,17 @@
 <div id="app">
   <div id="header">
     <div id="logo">palantir <span>// seeing stone</span></div>
+    <button id="session-btn" title="Switch tmux session">eps</button>
+  </div>
+  <div id="session-picker">
+    <div id="session-picker-inner">
+      <div class="session-picker-title">tmux session</div>
+      <div id="session-list"></div>
+      <div id="session-custom">
+        <input id="session-input" type="text" placeholder="session name…" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="session-go">go</button>
+      </div>
+    </div>
   </div>
   <div id="main">
     <div id="terminal-wrap">
@@ -333,10 +488,14 @@
     </div>
     <div id="palette">
       <div id="input-bar">
-        <textarea id="input-text" placeholder="type or dictate…" rows="2" autocorrect="on" autocapitalize="sentences" spellcheck="true"></textarea>
+        <textarea id="input-text" placeholder="type or dictate…" rows="2" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
         <button id="input-send" type="button">send ↵</button>
       </div>
       <div id="palette-buttons"></div>
+      <div id="history-section">
+        <div class="group-label" id="history-label">history</div>
+        <div id="history-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -375,7 +534,7 @@
 
   // Auth gate
   const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-  let ws, reconnectTimer, intentionalClose = false;
+  let ws, reconnectTimer, intentionalClose = false, wsConnected = false;
 
   function send(msg) {
     if (ws && ws.readyState === WebSocket.OPEN)
@@ -388,17 +547,30 @@
     const token = sessionStorage.getItem('palantir_token');
     ws = new WebSocket(`${wsProto}://${location.host}?token=${encodeURIComponent(token || '')}`);
 
-    ws.onopen = () => send({ type: 'resize', cols: term.cols, rows: term.rows });
+    wsConnected = false;
+    ws.onopen = () => {
+      wsConnected = true;
+      document.getElementById('gate').style.display = 'none';
+      // Fresh pty on every connect (including silent reconnects), so force the
+      // send even if the geometry matches what the last connection had.
+      fitAddon.fit();
+      sendResize(true);
+      apiFetch('/api/session').then(r => r.json()).then(({ session }) => setSessionBtn(session)).catch(() => {});
+    };
     ws.binaryType = 'arraybuffer';
     ws.onmessage = (e) => term.write(
       e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : e.data
     );
-    ws.onclose = (e) => {
-      if (e.code === 1006 || e.code === 4000) {
+    ws.onclose = () => {
+      const wasConnected = wsConnected;
+      wsConnected = false;
+      if (!wasConnected) {
+        // Handshake rejected — bad token
         sessionStorage.removeItem('palantir_token');
         showGate();
-        if (e.code === 4000) pinError();
+        pinError();
       } else if (!intentionalClose) {
+        // Was connected, dropped — reconnect silently
         reconnectTimer = setTimeout(connect, 2000);
       }
     };
@@ -459,13 +631,16 @@
 
   function submitPin() {
     sessionStorage.setItem('palantir_token', pin);
-    document.getElementById('gate').style.display = 'none';
     connect();
   }
 
   function pinError() {
     failCount++;
     updateDots('error');
+    const dotsEl = document.getElementById('gate-dots');
+    dotsEl.classList.remove('shake');
+    void dotsEl.offsetWidth; // force reflow so re-triggering works
+    dotsEl.classList.add('shake');
     if (failCount >= 3) {
       failCount = 0;
       const wait = nextFib();
@@ -497,16 +672,45 @@
 
   term.onData((data) => send({ type: 'data', data }));
 
-  function sendResize() { send({ type: 'resize', cols: term.cols, rows: term.rows }); }
+  // Resize handling.
+  //
+  // Two things to avoid. fitAddon.fit() resizes the terminal element, which
+  // re-triggers the ResizeObserver watching that same element — a feedback
+  // loop. And every resize we forward becomes a SIGWINCH that makes tmux
+  // redraw the entire screen, so a burst of them (iOS fires visualViewport
+  // resize continuously while the keyboard animates) interleaves partial
+  // redraws and leaves duplicated rows on screen.
+  //
+  // So: debounce the refit, and only send when the geometry actually changed.
+  let lastCols = 0, lastRows = 0, refitTimer = null;
 
-  const ro = new ResizeObserver(() => { fitAddon.fit(); sendResize(); });
+  function sendResize(force = false) {
+    if (!force && term.cols === lastCols && term.rows === lastRows) return;
+    lastCols = term.cols; lastRows = term.rows;
+    send({ type: 'resize', cols: term.cols, rows: term.rows });
+  }
+
+  function refit() {
+    clearTimeout(refitTimer);
+    refitTimer = setTimeout(() => {
+      try { fitAddon.fit(); } catch { /* element not laid out yet */ }
+      sendResize();
+    }, 100);
+  }
+
+  const ro = new ResizeObserver(refit);
   ro.observe(document.getElementById('terminal-wrap'));
 
   window.visualViewport?.addEventListener('resize', () => {
+    // Measure the header rather than assuming 44px — it's actually
+    // calc(44px + env(safe-area-inset-top)), which is ~103px on a notched
+    // iPhone and exactly 44px in a desktop browser. Hardcoding 44 under-
+    // subtracts by the inset on device, so the terminal is sized taller than
+    // the space it actually has.
+    const headerH = document.getElementById('header').getBoundingClientRect().height;
     document.getElementById('terminal-wrap').style.height =
-      (window.visualViewport.height - 44) + 'px';
-    fitAddon.fit();
-    sendResize();
+      (window.visualViewport.height - headerH) + 'px';
+    refit();
   });
 
   // Mobile touch handling for terminal:
@@ -545,11 +749,53 @@
   const hapticTrigger = document.getElementById('haptic-trigger');
   function haptic() { hapticTrigger.click(); }
 
-  // Input bar
+  // Input bar + history
   const inputText = document.getElementById('input-text');
+  const historyList = document.getElementById('history-list');
+  const HISTORY_KEY = 'palantir_history';
+  const HISTORY_MAX = 10;
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveHistory(h) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  }
+
+  function pushHistory(val) {
+    const h = loadHistory().filter(x => x !== val); // dedupe
+    h.unshift(val);
+    saveHistory(h.slice(0, HISTORY_MAX));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const h = loadHistory();
+    historyList.innerHTML = '';
+    h.forEach(msg => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'history-item';
+      btn.textContent = msg;
+      btn.title = msg;
+      btn.addEventListener('click', () => {
+        inputText.value = msg;
+        inputText.focus();
+      });
+      historyList.appendChild(btn);
+    });
+    document.getElementById('history-section').style.display = h.length ? '' : 'none';
+  }
+
+  renderHistory();
+
   document.getElementById('input-send').addEventListener('click', () => {
     const val = inputText.value;
+    const trimmed = val.trim();
     haptic();
+    if (trimmed) pushHistory(trimmed);
     send({ type: 'data', data: val + '\r' });
     inputText.value = '';
     inputText.blur();
@@ -597,9 +843,86 @@
           buttonsEl.appendChild(btn);
         });
       });
+
     });
 
   term.focus();
+
+  // Session switcher
+  const sessionBtn = document.getElementById('session-btn');
+  const sessionPicker = document.getElementById('session-picker');
+  const sessionList = document.getElementById('session-list');
+  const sessionInput = document.getElementById('session-input');
+
+  function apiToken() { return sessionStorage.getItem('palantir_token') || ''; }
+
+  function apiFetch(path, opts = {}) {
+    const sep = path.includes('?') ? '&' : '?';
+    return fetch(`${path}${sep}token=${encodeURIComponent(apiToken())}`, opts);
+  }
+
+  function setSessionBtn(name) {
+    sessionBtn.textContent = name;
+  }
+
+  function openSessionPicker() {
+    sessionList.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:4px 4px 2px">loading…</div>';
+    sessionPicker.classList.add('open');
+    apiFetch('/api/sessions')
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(({ sessions, current }) => {
+        sessionList.innerHTML = '';
+        const list = Array.isArray(sessions) && sessions.length ? sessions : (current ? [current] : []);
+        list.forEach(name => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'session-item' + (name === current ? ' active' : '');
+          btn.textContent = name;
+          btn.addEventListener('click', () => switchSession(name));
+          sessionList.appendChild(btn);
+        });
+      })
+      .catch(() => { sessionList.innerHTML = '<div style="color:#e05252;font-size:11px;padding:4px">error loading sessions</div>'; });
+  }
+
+  function closeSessionPicker() {
+    sessionPicker.classList.remove('open');
+    sessionInput.value = '';
+  }
+
+  function switchSession(name) {
+    if (!name || !/^[a-zA-Z0-9_\-.]+$/.test(name)) return;
+    apiFetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: name }),
+    }).then(() => {
+      setSessionBtn(name);
+      closeSessionPicker();
+      intentionalClose = true;
+      ws?.close();
+      connect();
+    });
+  }
+
+  sessionBtn.addEventListener('click', () => {
+    if (sessionPicker.classList.contains('open')) closeSessionPicker();
+    else openSessionPicker();
+  });
+
+  sessionPicker.addEventListener('click', (e) => {
+    if (e.target === sessionPicker) closeSessionPicker();
+  });
+
+  document.getElementById('session-go').addEventListener('click', () => {
+    switchSession(sessionInput.value.trim());
+  });
+
+  sessionInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') switchSession(sessionInput.value.trim());
+    if (e.key === 'Escape') closeSessionPicker();
+  });
+
 </script>
 </body>
 </html>
